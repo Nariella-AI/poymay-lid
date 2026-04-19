@@ -22,6 +22,8 @@ const DOUBLE_MS = 5200;
 const CATCHER_BOTTOM_FRAC = 0.03;
 const ITEM_HIT_HEIGHT = 56;
 const CATCHER_HIT_HEIGHT = 62;
+/** Совпадает с CSS: `.touch-bar { display: none }` при min-width: 1024px */
+const DESKTOP_TOUCH_BAR_HIDDEN_MQ = '(min-width: 1024px)';
 
 function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -111,6 +113,9 @@ export default function App() {
   const [goldenSalute, setGoldenSalute] = useState(null);
   const [soundOn, setSoundOn] = useState(true);
   const [startedAt, setStartedAt] = useState(null);
+  const [desktopTouchFallback, setDesktopTouchFallback] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia(DESKTOP_TOUCH_BAR_HIDDEN_MQ).matches
+  );
 
   const gameAreaRef = useRef(null);
   const inputRef = useRef({ left: false, right: false });
@@ -145,6 +150,14 @@ export default function App() {
   useEffect(() => {
     soundOnRef.current = soundOn;
   }, [soundOn]);
+
+  useEffect(() => {
+    const mq = window.matchMedia(DESKTOP_TOUCH_BAR_HIDDEN_MQ);
+    const sync = () => setDesktopTouchFallback(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   const pushToast = useCallback((text, tone) => {
     const id = ++toastKeyRef.current;
@@ -574,47 +587,128 @@ export default function App() {
     <div className={`app ${phase === 'playing' && urgentTimer ? 'app--finale' : ''}`}>
       {phase === 'start' && <StartScreen onStart={startGame} />}
       {phase === 'playing' && (
-        <div className="play-layout">
-          <div
-            style={topTimerBarStyle(urgentTimer)}
-            role="status"
-            aria-live="polite"
-            aria-label={`Оставшееся время: ${formatTime(timeLeft)}`}
-          >
-            Время: {formatTime(timeLeft)}
+        <div
+          className="screen screen--game"
+          style={{
+            alignItems: 'stretch',
+            justifyContent: 'flex-start',
+            flex: 1,
+            minHeight: 0,
+            width: '100%',
+            maxWidth: 560,
+            alignSelf: 'center',
+            boxSizing: 'border-box',
+          }}
+        >
+          <div className="play-layout">
+            <div
+              style={topTimerBarStyle(urgentTimer)}
+              role="status"
+              aria-live="polite"
+              aria-label={`Оставшееся время: ${formatTime(timeLeft)}`}
+            >
+              Время: {formatTime(timeLeft)}
+            </div>
+            <HUD
+              score={score}
+              timeLeft={timeLeft}
+              lives={lives}
+              comboStreak={comboStreak}
+              comboMult={comboMult}
+              shields={shields}
+              freezeActive={freezeActive}
+              doubleActive={doubleActive}
+              urgentTimer={urgentTimer}
+              dangerLives={dangerLives}
+              soundOn={soundOn}
+              onToggleSound={toggleSound}
+            />
+            <GameArea
+              gameAreaRef={gameAreaRef}
+              items={items}
+              catcherX={catcherX}
+              catcherYRatio={CATCHER_BOTTOM_FRAC}
+              catcherFx={catcherFx}
+              toasts={toasts}
+              bursts={bursts}
+              goldenSalute={goldenSalute}
+              dangerLives={dangerLives}
+              urgentTimer={urgentTimer}
+              freezeActive={freezeActive}
+              finaleMode={urgentTimer}
+              onTouchLeftStart={touchLeftStart}
+              onTouchLeftEnd={touchLeftEnd}
+              onTouchRightStart={touchRightStart}
+              onTouchRightEnd={touchRightEnd}
+            />
+            {desktopTouchFallback && (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 14,
+                  width: '100%',
+                  flexShrink: 0,
+                  paddingBottom: 'env(safe-area-inset-bottom)',
+                }}
+              >
+                <button
+                  type="button"
+                  className="touch-btn touch-btn--left"
+                  aria-label="Влево"
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    try {
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                    } catch {
+                      /* нет поддержки */
+                    }
+                    touchLeftStart();
+                  }}
+                  onPointerUp={(e) => {
+                    e.preventDefault();
+                    touchLeftEnd();
+                  }}
+                  onPointerCancel={() => touchLeftEnd()}
+                  onPointerLeave={(e) => {
+                    if (e.buttons === 0) touchLeftEnd();
+                  }}
+                >
+                  <span className="touch-btn__icon" aria-hidden="true">
+                    ‹
+                  </span>
+                  Влево
+                </button>
+                <button
+                  type="button"
+                  className="touch-btn touch-btn--right"
+                  aria-label="Вправо"
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    try {
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                    } catch {
+                      /* нет поддержки */
+                    }
+                    touchRightStart();
+                  }}
+                  onPointerUp={(e) => {
+                    e.preventDefault();
+                    touchRightEnd();
+                  }}
+                  onPointerCancel={() => touchRightEnd()}
+                  onPointerLeave={(e) => {
+                    if (e.buttons === 0) touchRightEnd();
+                  }}
+                >
+                  Вправо
+                  <span className="touch-btn__icon" aria-hidden="true">
+                    ›
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
-          <HUD
-            score={score}
-            timeLeft={timeLeft}
-            lives={lives}
-            comboStreak={comboStreak}
-            comboMult={comboMult}
-            shields={shields}
-            freezeActive={freezeActive}
-            doubleActive={doubleActive}
-            urgentTimer={urgentTimer}
-            dangerLives={dangerLives}
-            soundOn={soundOn}
-            onToggleSound={toggleSound}
-          />
-          <GameArea
-            gameAreaRef={gameAreaRef}
-            items={items}
-            catcherX={catcherX}
-            catcherYRatio={CATCHER_BOTTOM_FRAC}
-            catcherFx={catcherFx}
-            toasts={toasts}
-            bursts={bursts}
-            goldenSalute={goldenSalute}
-            dangerLives={dangerLives}
-            urgentTimer={urgentTimer}
-            freezeActive={freezeActive}
-            finaleMode={urgentTimer}
-            onTouchLeftStart={touchLeftStart}
-            onTouchLeftEnd={touchLeftEnd}
-            onTouchRightStart={touchRightStart}
-            onTouchRightEnd={touchRightEnd}
-          />
         </div>
       )}
       {phase === 'end' && (
